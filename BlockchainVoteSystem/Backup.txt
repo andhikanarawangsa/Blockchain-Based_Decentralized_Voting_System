@@ -1,0 +1,443 @@
+# blockchain.py
+import hashlib
+import json
+from time import time
+
+class Block:
+    def __init__(self, index, timestamp, data, previous_hash):
+        self.index = index
+        self.timestamp = timestamp
+        self.data = data
+        self.previous_hash = previous_hash
+        self.hash = self.hash_block()
+
+    def hash_block(self):
+        block_data = {
+            "index": self.index,
+            "timestamp": self.timestamp,
+            "data": self.data,
+            "previous_hash": self.previous_hash
+        }
+        block_string = json.dumps(block_data, sort_keys=True).encode()
+        return hashlib.sha256(block_string).hexdigest()
+
+    def to_dict(self):
+        return {
+            "index": self.index,
+            "timestamp": self.timestamp,
+            "data": self.data,
+            "previous_hash": self.previous_hash,
+            "hash": self.hash
+        }
+
+class Blockchain:
+    def __init__(self):
+        self.chain = []
+        self.create_genesis_block()
+
+    def create_genesis_block(self):
+        self.chain = []
+        self.chain.append(Block(0, time(), "Genesis Block", "0"))
+
+    def get_last_block(self):
+        return self.chain[-1]
+
+    def add_vote(self, voter_hash, candidate_name):
+        data = {
+            "voter": voter_hash,
+            "candidate": candidate_name
+        }
+        previous_block = self.get_last_block()
+        new_block = Block(
+            index=len(self.chain),
+            timestamp=time(),
+            data=data,
+            previous_hash=previous_block.hash
+        )
+        self.chain.append(new_block)
+        return new_block
+
+    def is_valid(self):
+        for i in range(1, len(self.chain)):
+            prev = self.chain[i-1]
+            curr = self.chain[i]
+            if curr.previous_hash != prev.hash:
+                return False
+            if curr.hash != curr.hash_block():
+                return False
+        return True
+
+    def to_dict(self):
+        return [b.to_dict() for b in self.chain]
+
+    def save_to_file(self, filename="chain_dump.json"):
+        with open(filename, "w", encoding="utf-8") as f:
+            json.dump(self.to_dict(), f, indent=4)
+        return filename
+
+    def load_from_file(self, filename="chain_dump.json"):
+        with open(filename, "r", encoding="utf-8") as f:
+            arr = json.load(f)
+        self.chain = []
+        for item in arr:
+            blk = Block(
+                index=item["index"],
+                timestamp=item["timestamp"],
+                data=item["data"],
+                previous_hash=item["previous_hash"]
+            )
+            blk.hash = item.get("hash", blk.hash)
+            self.chain.append(blk)
+        return True
+
+
+
+
+=====================================
+
+Server.py
+
+from flask import Flask, request, jsonify
+from blockchain import Blockchain
+import hashlib
+import os
+from datetime import datetime
+
+# cryptography imports
+from cryptography.hazmat.primitives import serialization, hashes
+from cryptography.hazmat.primitives.asymmetric import padding
+
+app = Flask(__name__)
+blockchain = Blockchain()
+
+# store public keys in-memory: { voter_hash: public_key_object }
+public_keys = {}
+
+CHAIN_DIR = "chain"
+os.makedirs(CHAIN_DIR, exist_ok=True)
+
+@app.route("/register", methods=["POST"])
+def register():
+    if not request.is_json:
+        return jsonify({"error": "Content-Type must be application/json"}), 415
+    data = request.get_json(silent=True) or {}
+    voter_id = data.get("voter_id")
+    public_key_pem = data.get("public_key")
+
+    if not voter_id or not public_key_pem:
+        return jsonify({"error": "Missing voter_id or public_key"}), 400
+
+    voter_hash = hashlib.sha256(str(voter_id).encode()).hexdigest()
+    try:
+        public_key_obj = serialization.load_pem_public_key(public_key_pem.encode())
+    except Exception as e:
+        return jsonify({"error": "Invalid public key PEM", "detail": str(e)}), 400
+
+    public_keys[voter_hash] = public_key_obj
+    return jsonify({"message": "Registered", "voter_hash": voter_hash}), 201
+
+@app.route("/vote", methods=["POST"])
+def vote_endpoint():
+    if not request.is_json:
+        return jsonify({"error": "Content-Type must be application/json"}), 415
+    data = request.get_json(silent=True) or {}
+    voter_hash = data.get("voter_hash")
+    candidate = data.get("candidate")
+    signature_hex = data.get("signature")
+
+    if not voter_hash or not candidate or not signature_hex:
+        return jsonify({"error": "Missing voter_hash/candidate/signature"}), 400
+
+    if voter_hash not in public_keys:
+        return jsonify({"error": "Voter not registered"}), 403
+
+    public_key = public_keys[voter_hash]
+    try:
+        signature = bytes.fromhex(signature_hex)
+    except Exception as e:
+        return jsonify({"error": "Invalid signature hex", "detail": str(e)}), 400
+
+    message = f"{voter_hash}:{candidate}".encode()
+    try:
+        public_key.verify(
+            signature,
+            message,
+            padding.PSS(mgf=padding.MGF1(hashes.SHA256()), salt_length=padding.PSS.MAX_LENGTH),
+            hashes.SHA256()
+        )
+    except Exception as e:
+        return jsonify({"error": "Invalid signature verification", "detail": str(e)}), 403
+
+    # double-vote prevention
+    for b in blockchain.chain:
+        if isinstance(b.data, dict) and b.data.get("voter") == voter_hash:
+            return jsonify({"error": "Voter has already voted"}), 403
+
+    new_block = blockchain.add_vote(voter_hash, candidate)
+    return jsonify({"message": "Vote recorded securely", "block": new_block.to_dict()}), 201
+
+@app.route("/chain", methods=["GET"])
+def chain():
+    return jsonify(blockchain.to_dict()), 200
+
+@app.route("/validate", methods=["GET"])
+def validate():
+    try:
+        valid = blockchain.is_valid()
+        return jsonify({"valid": valid}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/export", methods=["GET"])
+def export_chain():
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = os.path.join(CHAIN_DIR, f"chain_dump_{ts}.json")
+    try:
+        blockchain.save_to_file(filename)
+        return jsonify({"message": "Exported", "file": os.path.basename(filename)}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/import", methods=["POST"])
+def import_chain():
+    data = request.get_json(silent=True) or {}
+    fname = data.get("filename", None)
+    if not fname:
+        return jsonify({"error": "Provide filename (relative to chain/ folder)"}), 400
+
+    filename = os.path.join(CHAIN_DIR, os.path.basename(fname))
+    if not os.path.exists(filename):
+        return jsonify({"error": f"File not found: {filename}"}), 400
+    try:
+        blockchain.load_from_file(filename)
+        return jsonify({"message": "Imported", "file": os.path.basename(filename)}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/reset", methods=["POST"])
+def reset_chain():
+    global blockchain
+    blockchain = Blockchain()
+    return jsonify({"message": "Blockchain reset successfully"}), 200
+
+# --- new endpoint /results ---
+@app.route("/results", methods=["GET"])
+def results():
+    counts = {}
+    for b in blockchain.chain[1:]:  # skip genesis
+        if isinstance(b.data, dict):
+            cand = b.data.get("candidate")
+            if cand:
+                counts[cand] = counts.get(cand, 0) + 1
+    return jsonify({"results": counts}), 200
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000, debug=False)
+
+
+
+===================================
+
+# generate_keys.py
+import os
+import sys
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives import serialization
+
+KEY_DIR = "keys"
+
+def ensure_key_dir():
+    os.makedirs(KEY_DIR, exist_ok=True)
+
+def generate_keys(voter_id):
+    ensure_key_dir()
+    private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    public_key = private_key.public_key()
+
+    priv_file = os.path.join(KEY_DIR, f"{voter_id}_private.pem")
+    pub_file = os.path.join(KEY_DIR, f"{voter_id}_public.pem")
+
+    with open(priv_file, "wb") as f:
+        f.write(private_keys_bytes(private_key))
+
+    with open(pub_file, "wb") as f:
+        f.write(public_key.public_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo
+        ))
+
+    print("Keys generated:")
+    print(" Private:", priv_file)
+    print(" Public :", pub_file)
+    print("NOTE: Keep the private file safe and never upload it anywhere.")
+
+def private_keys_bytes(private_key):
+    return private_key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.NoEncryption()
+    )
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        print("Usage: python generate_keys.py <voter_id>")
+    else:
+        generate_keys(sys.argv[1])
+
+
+============================
+
+# client.py
+import requests, json, hashlib, sys, os
+from cryptography.hazmat.primitives import serialization, hashes
+from cryptography.hazmat.primitives.asymmetric import padding
+
+BASE_URL = "http://127.0.0.1:5000"
+KEY_DIR = "keys"
+CHAIN_DIR = "chain"
+
+# --- Helper: run generate_keys if asked ---
+def cmd_genkeys(voter_id):
+    try:
+        from generate_keys import generate_keys
+    except Exception:
+        print("generate_keys.py not found or error importing it.")
+        return
+    generate_keys(voter_id)
+
+# --- Register voter ---
+def register(voter_id, public_pem_path=None):
+    if not public_pem_path:
+        public_pem_path = os.path.join(KEY_DIR, f"{voter_id}_public.pem")
+    try:
+        with open(public_pem_path, "r", encoding="utf-8") as f:
+            pem = f.read()
+    except FileNotFoundError:
+        print("Public key file not found:", public_pem_path); return
+    payload = {"voter_id": voter_id, "public_key": pem}
+    r = requests.post(BASE_URL + "/register", json=payload)
+    try:
+        print(r.status_code, json.dumps(r.json(), indent=2, ensure_ascii=False))
+    except Exception:
+        print(r.status_code, r.text)
+
+# --- Vote ---
+def sign_and_vote(voter_id, candidate):
+    priv_path = os.path.join(KEY_DIR, f"{voter_id}_private.pem")
+    try:
+        with open(priv_path, "rb") as f:
+            priv = serialization.load_pem_private_key(f.read(), password=None)
+    except FileNotFoundError:
+        print("Private key not found:", priv_path); return
+    except Exception as e:
+        print("Failed load private key:", e); return
+
+    voter_hash = hashlib.sha256(voter_id.encode()).hexdigest()
+    message = f"{voter_hash}:{candidate}".encode()
+    try:
+        signature = priv.sign(
+            message,
+            padding.PSS(mgf=padding.MGF1(hashes.SHA256()), salt_length=padding.PSS.MAX_LENGTH),
+            hashes.SHA256()
+        )
+    except Exception as e:
+        print("Signing failed:", e); return
+
+    payload = {
+        "voter_hash": voter_hash,
+        "candidate": candidate,
+        "signature": signature.hex()
+    }
+    r = requests.post(BASE_URL + "/vote", json=payload)
+    try:
+        print(r.status_code, json.dumps(r.json(), indent=2, ensure_ascii=False))
+    except Exception:
+        print(r.status_code, r.text)
+
+# --- Show blockchain ---
+def show_chain():
+    r = requests.get(BASE_URL + "/chain")
+    try:
+        print(json.dumps(r.json(), indent=2, ensure_ascii=False))
+    except Exception:
+        print(r.text)
+
+# --- Validate chain ---
+def validate():
+    r = requests.get(BASE_URL + "/validate")
+    try:
+        print(json.dumps(r.json(), indent=2))
+    except Exception:
+        print(r.text)
+
+# --- Export chain ---
+def export_chain():
+    r = requests.get(BASE_URL + "/export")
+    try:
+        print(json.dumps(r.json(), indent=2, ensure_ascii=False))
+    except Exception:
+        print(r.text)
+
+# --- Import chain ---
+def import_chain(filename):
+    r = requests.post(BASE_URL + "/import", json={"filename": filename})
+    try:
+        print(json.dumps(r.json(), indent=2, ensure_ascii=False))
+    except Exception:
+        print(r.text)
+
+# --- Reset chain ---
+def reset_chain():
+    r = requests.post(BASE_URL + "/reset", json={})
+    try:
+        print(json.dumps(r.json(), indent=2, ensure_ascii=False))
+    except Exception:
+        print(r.text)
+
+# --- Show voting results ---
+def show_results():
+    r = requests.get(BASE_URL + "/results")
+    try:
+        print(json.dumps(r.json(), indent=2, ensure_ascii=False))
+    except Exception:
+        print(r.text)
+
+# --- Help text ---
+def help_text():
+    print("Usage:")
+    print("  python client.py genkeys <voter_id>            # create keys under keys/")
+    print("  python client.py register <voter_id> [pub.pem] # upload public key to server (default keys/<voter_id>_public.pem)")
+    print("  python client.py vote <voter_id> <candidate>   # sign with private key (keys/<voter_id>_private.pem) and submit")
+    print("  python client.py chain                         # show blockchain")
+    print("  python client.py validate                      # validate blockchain")
+    print("  python client.py export                        # export blockchain into chain/ folder")
+    print("  python client.py import <filename>             # import file from chain/")
+    print("  python client.py reset                         # reset blockchain")
+    print("  python client.py results                       # show current voting results")
+
+# --- Main CLI ---
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        help_text(); sys.exit(0)
+    cmd = sys.argv[1].lower()
+
+    if cmd == "genkeys" and len(sys.argv) == 3:
+        cmd_genkeys(sys.argv[2])
+    elif cmd == "register" and len(sys.argv) in (3,4):
+        register(sys.argv[2], sys.argv[3] if len(sys.argv)==4 else None)
+    elif cmd == "vote" and len(sys.argv) == 4:
+        sign_and_vote(sys.argv[2], sys.argv[3])
+    elif cmd == "chain":
+        show_chain()
+    elif cmd == "validate":
+        validate()
+    elif cmd == "export":
+        export_chain()
+    elif cmd == "import" and len(sys.argv) == 3:
+        import_chain(sys.argv[2])
+    elif cmd == "reset":
+        reset_chain()
+    elif cmd == "results":
+        show_results()
+    else:
+        help_text()

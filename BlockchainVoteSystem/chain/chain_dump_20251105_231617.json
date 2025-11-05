@@ -1,0 +1,29 @@
+[
+    {
+        "index": 0,
+        "timestamp": 1762359019.5366762,
+        "data": "Genesis Block",
+        "previous_hash": "0",
+        "hash": "96aa21d4d4f1ae7d779bfb04e3b441f7431afdd09e8ea8f019155b56a3fa9904"
+    },
+    {
+        "index": 1,
+        "timestamp": 1762359231.3935165,
+        "data": {
+            "voter": "de215c71ff00956e7021244e6fd22c7e72f0bf946ea797ead7a1b3da2d92227a",
+            "candidate": "Anis"
+        },
+        "previous_hash": "96aa21d4d4f1ae7d779bfb04e3b441f7431afdd09e8ea8f019155b56a3fa9904",
+        "hash": "a5f33484df575ed0f1090a5ea7f5f63ac0ac21f261b803b03b23f7d5a11be163"
+    },
+    {
+        "index": 2,
+        "timestamp": 1762359342.1317594,
+        "data": {
+            "voter": "6fad7438c46d7301c2c8b877a5968526684ccffe5147886f6e28b36d51298178",
+            "candidate": "Prabowo"
+        },
+        "previous_hash": "a5f33484df575ed0f1090a5ea7f5f63ac0ac21f261b803b03b23f7d5a11be163",
+        "hash": "0a68f63defbb677cfe48f527933c20976a92875b5c2e4c0cdf4add6739c7795c"
+    }
+]
