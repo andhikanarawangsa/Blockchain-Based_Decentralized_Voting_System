@@ -1,4 +1,3 @@
-# blockchain.py
 import hashlib
 import json
 from time import time
@@ -7,8 +6,9 @@ class Block:
     def __init__(self, index, timestamp, data, previous_hash):
         self.index = index
         self.timestamp = timestamp
-        self.data = data
+        self.data = data  # list of votes
         self.previous_hash = previous_hash
+        self.nonce = 0  # untuk PoW
         self.hash = self.hash_block()
 
     def hash_block(self):
@@ -16,10 +16,19 @@ class Block:
             "index": self.index,
             "timestamp": self.timestamp,
             "data": self.data,
-            "previous_hash": self.previous_hash
+            "previous_hash": self.previous_hash,
+            "nonce": self.nonce
         }
         block_string = json.dumps(block_data, sort_keys=True).encode()
         return hashlib.sha256(block_string).hexdigest()
+
+    def mine_block(self, difficulty=4):
+        """Proof of Work: cari hash yang diawali dengan '0'*difficulty"""
+        prefix = "0" * difficulty
+        while not self.hash.startswith(prefix):
+            self.nonce += 1
+            self.hash = self.hash_block()
+        print(f"Block mined: {self.hash} (nonce={self.nonce})")
 
     def to_dict(self):
         return {
@@ -27,8 +36,10 @@ class Block:
             "timestamp": self.timestamp,
             "data": self.data,
             "previous_hash": self.previous_hash,
+            "nonce": self.nonce,
             "hash": self.hash
         }
+
 
 class Blockchain:
     def __init__(self):
@@ -37,33 +48,23 @@ class Blockchain:
 
     def create_genesis_block(self):
         self.chain = []
-        self.chain.append(Block(0, time(), "Genesis Block", "0"))
+        genesis_block = Block(0, time(), "Genesis Block", "0")
+        # Bisa juga ditambang, tapi biasanya genesis langsung valid
+        self.chain.append(genesis_block)
 
     def get_last_block(self):
         return self.chain[-1]
 
-    def add_vote(self, voter_hash, candidate_name):
-        data = {
-            "voter": voter_hash,
-            "candidate": candidate_name
-        }
-        previous_block = self.get_last_block()
-        new_block = Block(
-            index=len(self.chain),
-            timestamp=time(),
-            data=data,
-            previous_hash=previous_block.hash
-        )
-        self.chain.append(new_block)
-        return new_block
-
-    def is_valid(self):
+    def is_valid(self, difficulty=4):
+        prefix = "0" * difficulty
         for i in range(1, len(self.chain)):
             prev = self.chain[i-1]
             curr = self.chain[i]
             if curr.previous_hash != prev.hash:
                 return False
             if curr.hash != curr.hash_block():
+                return False
+            if not curr.hash.startswith(prefix):
                 return False
         return True
 
@@ -86,6 +87,21 @@ class Blockchain:
                 data=item["data"],
                 previous_hash=item["previous_hash"]
             )
+            blk.nonce = item.get("nonce", 0)
             blk.hash = item.get("hash", blk.hash)
             self.chain.append(blk)
         return True
+
+    def from_dict(self, chain_list):
+        """Bangun blockchain dari list dict (hasil to_dict)"""
+        self.chain = []
+        for item in chain_list:
+            blk = Block(
+                index=item["index"],
+                timestamp=item["timestamp"],
+                data=item["data"],
+                previous_hash=item["previous_hash"]
+            )
+            blk.nonce = item.get("nonce", 0)
+            blk.hash = item.get("hash", blk.hash)
+            self.chain.append(blk)

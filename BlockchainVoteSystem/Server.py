@@ -1,26 +1,24 @@
+# server.py
 from flask import Flask, request, jsonify
-from blockchain import Blockchain
-import hashlib
-import os
+from blockchain import Blockchain, Block
+import hashlib, os
 from datetime import datetime
 from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.hazmat.primitives.asymmetric import padding
 
 app = Flask(__name__)
+blockchain = Blockchain()
+pending_votes = []
+VOTES_PER_BLOCK = 2  # jumlah vote per blok
+DIFFICULTY = 4        # jumlah leading zeros untuk PoW
 
-# store multiple blockchains per region
-blockchains = {}  # { region_name: Blockchain() }
-
-# store public keys in-memory: { voter_hash: public_key_object }
+# store public keys: voter_hash -> public key object
 public_keys = {}
 
 CHAIN_DIR = "chain"
 os.makedirs(CHAIN_DIR, exist_ok=True)
 
-def get_blockchain(region):
-    if region not in blockchains:
-        blockchains[region] = Blockchain()
-    return blockchains[region]
+# -------------------- Routes --------------------
 
 @app.route("/register", methods=["POST"])
 def register():
@@ -29,7 +27,6 @@ def register():
     data = request.get_json(silent=True) or {}
     voter_id = data.get("voter_id")
     public_key_pem = data.get("public_key")
-
     if not voter_id or not public_key_pem:
         return jsonify({"error": "Missing voter_id or public_key"}), 400
 
@@ -44,110 +41,140 @@ def register():
 
 @app.route("/vote", methods=["POST"])
 def vote_endpoint():
+    global pending_votes
     if not request.is_json:
         return jsonify({"error": "Content-Type must be application/json"}), 415
     data = request.get_json(silent=True) or {}
     voter_hash = data.get("voter_hash")
     candidate = data.get("candidate")
     signature_hex = data.get("signature")
-    region = data.get("region", "default")  # default region jika tidak ada
 
     if not voter_hash or not candidate or not signature_hex:
         return jsonify({"error": "Missing voter_hash/candidate/signature"}), 400
-
     if voter_hash not in public_keys:
         return jsonify({"error": "Voter not registered"}), 403
 
-    public_key = public_keys[voter_hash]
+    # verifikasi signature
     try:
         signature = bytes.fromhex(signature_hex)
-    except Exception as e:
-        return jsonify({"error": "Invalid signature hex", "detail": str(e)}), 400
-
-    message = f"{voter_hash}:{candidate}".encode()
-    try:
-        public_key.verify(
+        message = f"{voter_hash}:{candidate}".encode()
+        public_keys[voter_hash].verify(
             signature,
             message,
             padding.PSS(mgf=padding.MGF1(hashes.SHA256()), salt_length=padding.PSS.MAX_LENGTH),
             hashes.SHA256()
         )
     except Exception as e:
-        return jsonify({"error": "Invalid signature verification", "detail": str(e)}), 403
+        return jsonify({"error": "Invalid signature", "detail": str(e)}), 403
 
-    blockchain = get_blockchain(region)
-
-    # double-vote prevention per region
+    # double vote check
     for b in blockchain.chain:
-        if isinstance(b.data, dict) and b.data.get("voter") == voter_hash:
-            return jsonify({"error": f"Voter has already voted in region {region}"}), 403
+        if isinstance(b.data, list):
+            for v in b.data:
+                if v.get("voter") == voter_hash:
+                    return jsonify({"error": "Voter has already voted"}), 403
+    for v in pending_votes:
+        if v["voter"] == voter_hash:
+            return jsonify({"error": "Voter has already voted (pending)"}), 403
 
-    new_block = blockchain.add_vote(voter_hash, candidate)
-    return jsonify({"message": "Vote recorded securely", "block": new_block.to_dict(), "region": region}), 201
+    # simpan ke pending pool
+    pending_votes.append({"voter": voter_hash, "candidate": candidate})
+
+    # cek apakah cukup buat blok baru
+    if len(pending_votes) >= VOTES_PER_BLOCK:
+        votes_to_add = pending_votes[:VOTES_PER_BLOCK]
+        pending_votes[:VOTES_PER_BLOCK] = []
+
+        previous_block = blockchain.get_last_block()
+        new_block = Block(
+            index=len(blockchain.chain),
+            timestamp=datetime.now().timestamp(),
+            data=votes_to_add,
+            previous_hash=previous_block.hash
+        )
+        # mine block dulu (PoW)
+        new_block.mine_block(DIFFICULTY)
+        blockchain.chain.append(new_block)
+
+        return jsonify({
+            "message": "Vote recorded in new block (mined with PoW)",
+            "block": new_block.to_dict()
+        }), 201
+    else:
+        return jsonify({
+            "message": f"Vote recorded in pending pool ({len(pending_votes)}/{VOTES_PER_BLOCK})",
+            "pending_votes": pending_votes
+        }), 201
+
+@app.route("/force_commit", methods=["POST"])
+def force_commit():
+    global pending_votes
+    if not pending_votes:
+        return jsonify({"error": "No pending votes to commit"}), 400
+
+    previous_block = blockchain.get_last_block()
+    new_block = Block(
+        index=len(blockchain.chain),
+        timestamp=datetime.now().timestamp(),
+        data=pending_votes.copy(),
+        previous_hash=previous_block.hash
+    )
+    # mine block dulu (PoW)
+    new_block.mine_block(DIFFICULTY)
+    blockchain.chain.append(new_block)
+    pending_votes = []
+
+    return jsonify({
+        "message": f"Pending votes forced into new block ({len(new_block.data)} votes, mined with PoW)",
+        "block": new_block.to_dict()
+    }), 201
 
 @app.route("/chain", methods=["GET"])
 def chain():
-    region = request.args.get("region", "default")
-    blockchain = get_blockchain(region)
-    return jsonify({"region": region, "chain": blockchain.to_dict()}), 200
+    return jsonify({
+        "chain": blockchain.to_dict(),
+        "pending_votes": pending_votes
+    }), 200
+
+@app.route("/results", methods=["GET"])
+def results():
+    counts = {}
+    for b in blockchain.chain[1:]:
+        if isinstance(b.data, list):
+            for vote in b.data:
+                cand = vote.get("candidate")
+                if cand:
+                    counts[cand] = counts.get(cand, 0) + 1
+    return jsonify({"results": counts, "pending_votes": pending_votes}), 200
 
 @app.route("/validate", methods=["GET"])
 def validate():
-    region = request.args.get("region", "default")
-    blockchain = get_blockchain(region)
     try:
-        valid = blockchain.is_valid()
-        return jsonify({"region": region, "valid": valid}), 200
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-@app.route("/export", methods=["GET"])
-def export_chain():
-    region = request.args.get("region", "default")
-    blockchain = get_blockchain(region)
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = os.path.join(CHAIN_DIR, f"chain_{region}_{ts}.json")
-    try:
-        blockchain.save_to_file(filename)
-        return jsonify({"message": "Exported", "file": os.path.basename(filename), "region": region}), 200
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-@app.route("/import", methods=["POST"])
-def import_chain():
-    data = request.get_json(silent=True) or {}
-    fname = data.get("filename", None)
-    region = data.get("region", "default")
-    if not fname:
-        return jsonify({"error": "Provide filename (relative to chain/ folder)"}), 400
-
-    filename = os.path.join(CHAIN_DIR, os.path.basename(fname))
-    if not os.path.exists(filename):
-        return jsonify({"error": f"File not found: {filename}"}), 400
-    try:
-        blockchain = get_blockchain(region)
-        blockchain.load_from_file(filename)
-        return jsonify({"message": "Imported", "file": os.path.basename(filename), "region": region}), 200
+        valid = blockchain.is_valid(DIFFICULTY)
+        return jsonify({"valid": valid}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 @app.route("/reset", methods=["POST"])
-def reset_chain():
-    region = request.args.get("region", "default")
-    blockchains[region] = Blockchain()
-    return jsonify({"message": f"Blockchain for region {region} reset successfully"}), 200
+def reset_blockchain():
+    global blockchain, pending_votes
+    blockchain = Blockchain()
+    pending_votes = []
+    return jsonify({"status": "success", "message": "Blockchain and results reset."})
 
-@app.route("/results", methods=["GET"])
-def results():
-    region = request.args.get("region", "default")
-    blockchain = get_blockchain(region)
-    counts = {}
-    for b in blockchain.chain[1:]:
-        if isinstance(b.data, dict):
-            cand = b.data.get("candidate")
-            if cand:
-                counts[cand] = counts.get(cand, 0) + 1
-    return jsonify({"region": region, "results": counts}), 200
+@app.route("/import", methods=["POST"])
+def import_chain():
+    global blockchain, pending_votes
+    if not request.is_json:
+        return jsonify({"error": "Content-Type must be JSON"}), 415
+    data = request.get_json(silent=True) or {}
+    try:
+        blockchain.from_dict(data.get("chain", []))
+        pending_votes.clear()
+        return jsonify({"status": "success", "message": "Blockchain imported successfully"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 400
 
+# -------------------- Run Server --------------------
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=False)

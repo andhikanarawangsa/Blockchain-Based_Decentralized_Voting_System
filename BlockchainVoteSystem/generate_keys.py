@@ -1,4 +1,3 @@
-# generate_keys.py
 import os
 import sys
 from cryptography.hazmat.primitives.asymmetric import rsa

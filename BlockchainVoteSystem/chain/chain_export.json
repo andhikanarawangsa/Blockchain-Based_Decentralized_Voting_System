@@ -1,0 +1,33 @@
+{
+  "chain": [
+    {
+      "data": "Genesis Block",
+      "hash": "c091ea2eb5029591ab45bb53a3d0c78322f83030409b0ec3ea47a5aeb905a98a",
+      "index": 0,
+      "previous_hash": "0",
+      "timestamp": 1762370801.024917
+    },
+    {
+      "data": [
+        {
+          "candidate": "Anis",
+          "voter": "de215c71ff00956e7021244e6fd22c7e72f0bf946ea797ead7a1b3da2d92227a"
+        },
+        {
+          "candidate": "Anis",
+          "voter": "6fad7438c46d7301c2c8b877a5968526684ccffe5147886f6e28b36d51298178"
+        }
+      ],
+      "hash": "f2000c722d97414bab283f69adaca259e73e9ed99a10a5f9e2c26e3e9e8dc653",
+      "index": 1,
+      "previous_hash": "c091ea2eb5029591ab45bb53a3d0c78322f83030409b0ec3ea47a5aeb905a98a",
+      "timestamp": 1762370914.113738
+    }
+  ],
+  "pending_votes": [
+    {
+      "candidate": "Ganjar",
+      "voter": "8ab5a15877f87d017895ad13b8b1689e435d64f3567532bde624a5317ce51fbd"
+    }
+  ]
+}
