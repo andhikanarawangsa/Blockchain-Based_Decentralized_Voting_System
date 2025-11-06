@@ -46,6 +46,13 @@ class VoteGUI:
         tk.Button(btn_frame, text="Reset Blockchain", command=self.threaded(self.reset_blockchain), **btn_params).grid(row=0, column=6, padx=5, pady=5)
         tk.Button(btn_frame, text="Validate Chain", command=self.threaded(self.validate_chain), **btn_params).grid(row=0, column=7, padx=5, pady=5)
 
+        #modif
+        tk.Button(btn_frame, text="Export Chain", command=self.threaded(self.export_chain), **btn_params).grid(row=0, column=8, padx=5, pady=5)
+        tk.Button(btn_frame, text="Import Chain", command=self.threaded(self.import_chain_prompt), **btn_params).grid(row=0, column=9, padx=5, pady=5)
+
+
+
+
         # Output box
         self.output_box = scrolledtext.ScrolledText(root, width=50, height=20, bg=self.txt_bg, fg=self.txt_fg, insertbackground=self.fg_color)
         self.output_box.pack(padx=10, pady=10, fill="both", expand=True)
@@ -172,6 +179,39 @@ class VoteGUI:
             txt.insert(tk.END, f"Error fetching results: {e}\n")
 
         self.print_to_box("Results displayed.\n")
+        
+    def export_chain(self):
+        self.print_to_box("Exporting blockchain to JSON file...")
+        try:
+            result = client.export_chain()
+            if "file" in result:
+                self.print_to_box(f"Export successful. Saved as: {result['file']}\n")
+                messagebox.showinfo("Success", f"Chain exported to:\n{result['file']}")
+            else:
+                self.print_to_box("Export failed.\n")
+        except Exception as e:
+            self.print_to_box(f"Export error: {e}\n")
+
+    def import_chain_prompt(self):
+        # Open dialog to ask filename
+        import tkinter.simpledialog as sd
+        filename = sd.askstring("Import Chain", "Enter filename (e.g., chain_export.json):")
+        if not filename:
+            return
+        self.import_chain(filename)
+
+    def import_chain(self, filename):
+        self.print_to_box(f"Importing chain from {filename}...")
+        try:
+            result = client.import_chain(filename)
+            if "status" in result or "chain" in result:
+                self.print_to_box("Import successful.\n")
+                messagebox.showinfo("Success", "Chain imported successfully.")
+            else:
+                self.print_to_box(f"Import failed: {result}\n")
+        except Exception as e:
+            self.print_to_box(f"Import error: {e}\n")
+
 
 
 if __name__ == "__main__":

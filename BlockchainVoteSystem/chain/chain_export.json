@@ -2,32 +2,29 @@
   "chain": [
     {
       "data": "Genesis Block",
-      "hash": "c091ea2eb5029591ab45bb53a3d0c78322f83030409b0ec3ea47a5aeb905a98a",
+      "hash": "4d1ddef725c6398a38dd2e2aa1b9a9e20969093d5a6e02205e1f01c93de21732",
       "index": 0,
+      "nonce": 0,
       "previous_hash": "0",
-      "timestamp": 1762370801.024917
+      "timestamp": 1762416050.7394798
     },
     {
       "data": [
         {
-          "candidate": "Anis",
-          "voter": "de215c71ff00956e7021244e6fd22c7e72f0bf946ea797ead7a1b3da2d92227a"
+          "candidate": "Kandidat A",
+          "voter": "557f3d3b1811d3378c6949612141fe09d538cc1a0fcbb747e5679b5b4f046934"
         },
         {
-          "candidate": "Anis",
-          "voter": "6fad7438c46d7301c2c8b877a5968526684ccffe5147886f6e28b36d51298178"
+          "candidate": "Kandidat B",
+          "voter": "c7a627af3049cc9c7ddd5a16135dc20bb9b525ff7ec713bafe7ca29e5804de30"
         }
       ],
-      "hash": "f2000c722d97414bab283f69adaca259e73e9ed99a10a5f9e2c26e3e9e8dc653",
+      "hash": "00004959208d4d00d7ffd02aa4c800670e9144f356828fcb4be6bcd602242016",
       "index": 1,
-      "previous_hash": "c091ea2eb5029591ab45bb53a3d0c78322f83030409b0ec3ea47a5aeb905a98a",
-      "timestamp": 1762370914.113738
+      "nonce": 91739,
+      "previous_hash": "4d1ddef725c6398a38dd2e2aa1b9a9e20969093d5a6e02205e1f01c93de21732",
+      "timestamp": 1762416139.013499
     }
   ],
-  "pending_votes": [
-    {
-      "candidate": "Ganjar",
-      "voter": "8ab5a15877f87d017895ad13b8b1689e435d64f3567532bde624a5317ce51fbd"
-    }
-  ]
+  "pending_votes": []
 }
