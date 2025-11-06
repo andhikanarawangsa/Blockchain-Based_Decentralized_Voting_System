@@ -82,8 +82,12 @@ def import_chain(filename):
         return {"error": f"File {filepath} does not exist."}
     with open(filepath, "r", encoding="utf-8") as f:
         data = json.load(f)
-    r = requests.post(BASE_URL + "/import", json=data)
+
+    payload = {"chain": data["chain"]}  # ✅ hanya kirim chain
+    
+    r = requests.post(BASE_URL + "/import", json=payload)
     return r.json() if r.status_code==200 else {"error": r.status_code}
+
 
 # --- CLI help ---
 def help_text():

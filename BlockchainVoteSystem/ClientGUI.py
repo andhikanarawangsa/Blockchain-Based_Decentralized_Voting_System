@@ -48,7 +48,7 @@ class VoteGUI:
 
         #modif
         tk.Button(btn_frame, text="Export Chain", command=self.threaded(self.export_chain), **btn_params).grid(row=0, column=8, padx=5, pady=5)
-        tk.Button(btn_frame, text="Import Chain", command=self.threaded(self.import_chain_prompt), **btn_params).grid(row=0, column=9, padx=5, pady=5)
+        #tk.Button(btn_frame, text="Import Chain", command=self.threaded(self.import_chain_prompt), **btn_params).grid(row=0, column=9, padx=5, pady=5)
 
 
 
@@ -204,13 +204,20 @@ class VoteGUI:
         self.print_to_box(f"Importing chain from {filename}...")
         try:
             result = client.import_chain(filename)
-            if "status" in result or "chain" in result:
+
+            if isinstance(result, dict) and result.get("status") == "success":
                 self.print_to_box("Import successful.\n")
                 messagebox.showinfo("Success", "Chain imported successfully.")
+
+                # ⬇️ optional: auto refresh chain window
+                self.show_chain()
+
             else:
                 self.print_to_box(f"Import failed: {result}\n")
+
         except Exception as e:
             self.print_to_box(f"Import error: {e}\n")
+
 
 
 

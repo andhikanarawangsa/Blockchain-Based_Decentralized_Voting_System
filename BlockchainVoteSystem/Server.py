@@ -165,15 +165,44 @@ def reset_blockchain():
 @app.route("/import", methods=["POST"])
 def import_chain():
     global blockchain, pending_votes
-    if not request.is_json:
-        return jsonify({"error": "Content-Type must be JSON"}), 415
-    data = request.get_json(silent=True) or {}
-    try:
-        blockchain.from_dict(data.get("chain", []))
-        pending_votes.clear()
-        return jsonify({"status": "success", "message": "Blockchain imported successfully"})
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 400
+
+    data = request.get_json()
+    blockchain.from_dict(data["chain"])   # <-- ini bagian penting
+    
+    pending_votes.clear()                 # reset pending
+    return jsonify({"status": "success", "message": "Blockchain imported"})
+
+    # Rebuild chain from JSON
+    for blk in new_chain_json:
+        new_block = Block(
+            index=blk["index"],
+            data=blk["data"],
+            previous_hash=blk["previous_hash"],
+            nonce=blk.get("nonce", 0)
+        )
+        new_chain.append(new_block)
+
+    # Replace blockchain chain
+    blockchain.chain = new_chain
+
+    # Recompute hash to ensure integrity
+    for i in range(len(blockchain.chain)):
+        blockchain.chain[i].hash = blockchain.chain[i].compute_hash()
+        if i > 0:
+            blockchain.chain[i].previous_hash = blockchain.chain[i-1].hash
+
+    # Rebuild voted_list to prevent double-vote
+    blockchain.voted_list.clear()
+    for blk in blockchain.chain:
+        if isinstance(blk.data, list):
+            for vote in blk.data:
+                blockchain.voted_list.add(vote.get("voter"))
+
+    # Clear pending votes (just like your original code)
+    pending_votes.clear()
+
+    return jsonify({"status": "success", "message": "Blockchain imported successfully", "blocks": len(blockchain.chain)})
+
 
 # -------------------- Run Server --------------------
 if __name__ == "__main__":

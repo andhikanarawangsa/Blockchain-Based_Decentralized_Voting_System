@@ -92,16 +92,17 @@ class Blockchain:
             self.chain.append(blk)
         return True
 
-    def from_dict(self, chain_list):
-        """Bangun blockchain dari list dict (hasil to_dict)"""
+    def from_dict(self, chain_json):
         self.chain = []
-        for item in chain_list:
-            blk = Block(
-                index=item["index"],
-                timestamp=item["timestamp"],
-                data=item["data"],
-                previous_hash=item["previous_hash"]
+
+        for block_data in chain_json:
+            block = Block(
+                index=block_data["index"],
+                timestamp=block_data["timestamp"],   # ✅ benar
+                data=block_data["data"],            # ✅ benar
+                previous_hash=block_data["previous_hash"]
             )
-            blk.nonce = item.get("nonce", 0)
-            blk.hash = item.get("hash", blk.hash)
-            self.chain.append(blk)
+            block.nonce = block_data.get("nonce", 0)
+            block.hash = block_data.get("hash", block.hash)
+            self.chain.append(block)
+
