@@ -1,13 +1,37 @@
+# ==========================================
+# Decentralized Voting Blockchain (Key Generator)
+# Author : Andhika Narawangsa Susilo
+# https://github.com/andhikanarawangsa
+# ==========================================
+
+# Description:
+# Generates RSA key pairs (private/public) for voters in the decentralized blockchain voting system.
+
+# Private key: used to sign votes (kept secret by user)
+# Public key: registered to blockchain server for verification
+
+# -------------------- IMPORTS --------------------
 import os
 import sys
+
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives import serialization
 
+# -------------------- CONFIG --------------------
 KEY_DIR = "keys"
 
+# -------------------- UTILITY --------------------
 def ensure_key_dir():
     os.makedirs(KEY_DIR, exist_ok=True)
-
+    
+def private_keys_bytes(private_key):
+    return private_key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.NoEncryption()
+    )
+    
+# -------------------- CORE LOGICS --------------------
 def generate_keys(voter_id):
     ensure_key_dir()
     private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
@@ -30,13 +54,7 @@ def generate_keys(voter_id):
     print(" Public :", pub_file)
     print("NOTE: Keep the private file safe and never upload it anywhere.")
 
-def private_keys_bytes(private_key):
-    return private_key.private_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PrivateFormat.PKCS8,
-        encryption_algorithm=serialization.NoEncryption()
-    )
-
+# -------------------- CLI --------------------
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         print("Usage: python generate_keys.py <voter_id>")

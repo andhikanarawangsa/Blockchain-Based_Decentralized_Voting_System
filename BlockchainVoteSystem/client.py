@@ -1,12 +1,32 @@
-import requests, json, hashlib, sys, os
+# ==========================================
+# Decentralized Voting Blockchain (Client Node)
+# Author : Andhika Narawangsa Susilo
+# https://github.com/andhikanarawangsa
+# ==========================================
+
+# Description:
+# Client interface for interacting with the decentralized voting blockchain,
+# handling key usage, vote signing, and communication with server nodes.
+
+# -------------------- IMPORTS --------------------
+import requests
+import json
+import hashlib
+import sys
+import os
+
 from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.hazmat.primitives.asymmetric import padding
 
+# -------------------- CONFIG --------------------
 BASE_URL = "http://127.0.0.1:5000"
+
 KEY_DIR = "keys"
 CHAIN_DIR = "chain"
+
 os.makedirs(CHAIN_DIR, exist_ok=True)
 
+# -------------------- UTILITIES --------------------
 def is_node_alive(url):
     try:
         requests.get(url, timeout=2)
@@ -15,7 +35,7 @@ def is_node_alive(url):
         print(f"[ERROR] Node {url} not reachable: {e}")
         return False
 
-# --- Existing functions ---
+# -------------------- CRYPTO --------------------
 def cmd_genkeys(voter_id):
     try:
         from generate_keys import generate_keys
@@ -31,7 +51,7 @@ def register(voter_id, public_pem_path=None):
     if not is_node_alive(BASE_URL):
         return {"error": "Server not running"}
     r = requests.post(BASE_URL + "/register", json={"voter_id": voter_id, "public_key": pem})
-    return r.json()  # <-- return data instead of print
+    return r.json()
 
 def vote(voter_id, candidate):
     priv_path = os.path.join(KEY_DIR, f"{voter_id}_private.pem")
@@ -56,7 +76,6 @@ def force_commit():
     r = requests.post(BASE_URL + "/force_commit")
     return r.json()
 
-# --- Update: return dict instead of print ---
 def show_chain():
     if not is_node_alive(BASE_URL):
         return {"error": "Server not running"}
@@ -75,7 +94,6 @@ def show_results():
     except:
         return None
 
-# --- New functions ---
 def reset_blockchain():
     if not is_node_alive(BASE_URL):
         return {"error": "Server not running"}
@@ -128,7 +146,7 @@ def import_chain(filename):
         return {"status": "failed", "error": str(e)}
 
 
-# --- CLI help ---
+# -------------------- CLI --------------------
 def help_text():
     print("Usage:")
     print(" python client.py genkeys <voter_id>")
@@ -142,30 +160,43 @@ def help_text():
     print(" python client.py export")
     print(" python client.py import <filename>")
 
-# --- CLI ---
+# -------------------- ENTRYPOINT --------------------
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        help_text(); sys.exit(0)
+        help_text()
+        sys.exit(0)
+        
     cmd = sys.argv[1].lower()
+    
     if cmd == "genkeys" and len(sys.argv)==3:
         cmd_genkeys(sys.argv[2])
+        
     elif cmd == "register" and len(sys.argv)==3:
         print(json.dumps(register(sys.argv[2]), indent=2))
+        
     elif cmd == "vote" and len(sys.argv)==4:
         print(json.dumps(vote(sys.argv[2], sys.argv[3]), indent=2))
+        
     elif cmd == "force_commit":
         print(json.dumps(force_commit(), indent=2))
+        
     elif cmd == "chain":
         print(json.dumps(show_chain(), indent=2))
+        
     elif cmd == "results":
         print(json.dumps(show_results(), indent=2))
+        
     elif cmd == "reset":
         print(json.dumps(reset_blockchain(), indent=2))
+        
     elif cmd == "validate":
         print(json.dumps(validate_chain(), indent=2))
+        
     elif cmd == "export":
         print(json.dumps(export_chain(), indent=2))
+        
     elif cmd == "import" and len(sys.argv)==3:
         print(json.dumps(import_chain(sys.argv[2]), indent=2))
+        
     else:
         help_text()
