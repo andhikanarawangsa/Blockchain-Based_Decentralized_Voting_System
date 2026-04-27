@@ -60,12 +60,19 @@ class Blockchain:
         for i in range(1, len(self.chain)):
             prev = self.chain[i-1]
             curr = self.chain[i]
+
             if curr.previous_hash != prev.hash:
+                print(f"[INVALID] Block {i}: previous_hash mismatch")
                 return False
+
             if curr.hash != curr.hash_block():
+                print(f"[INVALID] Block {i}: hash mismatch")
                 return False
+
             if not curr.hash.startswith(prefix):
+                print(f"[INVALID] Block {i}: PoW invalid")
                 return False
+
         return True
 
     def to_dict(self):

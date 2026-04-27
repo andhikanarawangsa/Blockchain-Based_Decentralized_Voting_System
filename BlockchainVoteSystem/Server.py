@@ -1,16 +1,90 @@
 # server.py
 from flask import Flask, request, jsonify
 from blockchain import Blockchain, Block
-import hashlib, os
 from datetime import datetime
 from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.hazmat.primitives.asymmetric import padding
+import hashlib, os
+import requests
 
 app = Flask(__name__)
 blockchain = Blockchain()
+peers = set()
+my_url = None
 pending_votes = []
-VOTES_PER_BLOCK = 2  # jumlah vote per blok
-DIFFICULTY = 4        # jumlah leading zeros untuk PoW
+VOTES_PER_BLOCK = 2
+DIFFICULTY = 4
+
+CHAIN_DIR = "chain"
+os.makedirs(CHAIN_DIR, exist_ok=True)
+
+CHAIN_FILE = None  # placeholder doang
+
+def resolve_conflicts():
+    global blockchain
+
+    longest_chain = None
+    max_length = len(blockchain.chain)
+
+    for peer in peers:
+        try:
+            response = requests.get(f"{peer}/chain")
+            if response.status_code == 200:
+                data = response.json()
+                length = len(data["chain"])
+                chain = data["chain"]
+
+                temp = Blockchain()
+                temp.from_dict(chain)
+
+                if length > max_length and temp.is_valid(DIFFICULTY):
+                    max_length = length
+                    longest_chain = temp
+
+        except Exception as e:
+            print(f"[SYNC ERROR] {peer}: {e}")
+
+    if longest_chain:
+        blockchain = longest_chain
+        blockchain.save_to_file(CHAIN_FILE)
+        print("[SYNC] Chain updated from peer")
+        return True
+
+    return False
+
+def load_chain_from_file():
+    global blockchain
+
+    if os.path.exists(CHAIN_FILE):
+        try:
+            temp_blockchain = Blockchain()
+            temp_blockchain.load_from_file(CHAIN_FILE)
+
+            print(f"[DEBUG] Loaded {len(temp_blockchain.chain)} blocks")
+
+            if temp_blockchain.is_valid(DIFFICULTY):
+                blockchain = temp_blockchain
+                print(f"[INFO] Blockchain loaded from {CHAIN_FILE}")
+            else:
+                print("[WARNING] Invalid chain → reset")
+                blockchain = Blockchain()
+
+        except Exception as e:
+            print(f"[ERROR] Load failed: {e}")
+            blockchain = Blockchain()
+    else:
+        print("[INFO] No existing chain → starting fresh")
+        
+def broadcast_block(block):
+    for peer in peers:
+        try:
+            requests.post(
+                f"{peer}/receive_block",
+                json={"block": block.to_dict()},
+                timeout=2
+            )
+        except Exception as e:
+            print(f"[BROADCAST ERROR] {peer}: {e}")
 
 # store public keys: voter_hash -> public key object
 public_keys = {}
@@ -19,6 +93,105 @@ CHAIN_DIR = "chain"
 os.makedirs(CHAIN_DIR, exist_ok=True)
 
 # -------------------- Routes --------------------
+@app.route("/add_peer", methods=["POST"])
+def add_peer():
+    data = request.get_json()
+    node = data.get("node")
+
+    if not node:
+        return jsonify({"error": "No node provided"}), 400
+
+    if node not in peers and node != my_url:
+        peers.add(node)
+
+        # 🔥 ambil peers dari node itu
+        try:
+            response = requests.get(f"{node}/get_peers", timeout=5)
+            if response.status_code == 200:
+                new_peers = response.json().get("peers", [])
+                for p in new_peers:
+                    if p != my_url:
+                        peers.add(p)
+        except Exception as e:
+            print(f"[PEER FETCH ERROR] {e}")
+
+        # 🔥 broadcast diri ke semua peers
+        for peer in peers:
+            if peer == my_url:
+                continue
+            try:
+                requests.post(
+                    f"{peer}/add_peer",
+                    json={"node": my_url},  # 🔥 FIX
+                    timeout=5
+                )
+            except Exception as e:
+                print(f"[BROADCAST ERROR] {peer}: {e}")
+
+    return jsonify({
+        "message": "Peer added",
+        "peers": list(peers)
+    })
+
+@app.route("/get_peers", methods=["GET"])
+def get_peers():
+    return jsonify({
+        "peers": list(peers)
+    })
+
+@app.route("/sync", methods=["GET"])
+def sync():
+    replaced = resolve_conflicts()
+    return jsonify({
+        "replaced": replaced,
+        "length": len(blockchain.chain)
+    })
+    
+@app.route("/receive_block", methods=["POST"])
+def receive_block():
+    global blockchain
+
+    data = request.get_json()
+    block_data = data.get("block")
+
+    if not block_data:
+        return jsonify({"error": "No block data"}), 400
+
+    # ambil block terakhir
+    last_block = blockchain.get_last_block()
+
+    # validasi basic
+    if block_data["previous_hash"] != last_block.hash:
+        print("[WARNING] Chain mismatch → syncing...")
+        resolve_conflicts()
+        return jsonify({"error": "Invalid previous hash, triggered sync"}), 400
+
+    # rebuild block
+    new_block = Block(
+        index=block_data["index"],
+        timestamp=block_data["timestamp"],
+        data=block_data["data"],
+        previous_hash=block_data["previous_hash"]
+    )
+    new_block.nonce = block_data["nonce"]
+    new_block.hash = block_data["hash"]
+
+    # cek hash valid
+    if new_block.hash != new_block.hash_block():
+        return jsonify({"error": "Invalid hash"}), 400
+
+    if not new_block.hash.startswith("0" * DIFFICULTY):
+        return jsonify({"error": "Invalid PoW"}), 400
+
+    # append
+    blockchain.chain.append(new_block)
+    blockchain.save_to_file(CHAIN_FILE)
+
+    print("[RECEIVE] Block added from peer")
+
+    return jsonify({"status": "Block accepted"}), 200
+
+##---------------------
 
 @app.route("/register", methods=["POST"])
 def register():
@@ -42,6 +215,7 @@ def register():
 @app.route("/vote", methods=["POST"])
 def vote_endpoint():
     global pending_votes
+    resolve_conflicts()
     if not request.is_json:
         return jsonify({"error": "Content-Type must be application/json"}), 415
     data = request.get_json(silent=True) or {}
@@ -95,6 +269,9 @@ def vote_endpoint():
         # mine block dulu (PoW)
         new_block.mine_block(DIFFICULTY)
         blockchain.chain.append(new_block)
+        # Auto Save
+        blockchain.save_to_file(CHAIN_FILE)
+        broadcast_block(new_block)
 
         return jsonify({
             "message": "Vote recorded in new block (mined with PoW)",
@@ -122,6 +299,9 @@ def force_commit():
     # mine block dulu (PoW)
     new_block.mine_block(DIFFICULTY)
     blockchain.chain.append(new_block)
+    # Auto Save
+    blockchain.save_to_file(CHAIN_FILE)
+    broadcast_block(new_block)
     pending_votes = []
 
     return jsonify({
@@ -160,50 +340,99 @@ def reset_blockchain():
     global blockchain, pending_votes
     blockchain = Blockchain()
     pending_votes = []
+    blockchain.save_to_file(CHAIN_FILE)
     return jsonify({"status": "success", "message": "Blockchain and results reset."})
 
 @app.route("/import", methods=["POST"])
 def import_chain():
     global blockchain, pending_votes
 
-    data = request.get_json()
-    blockchain.from_dict(data["chain"])   # <-- ini bagian penting
-    
-    pending_votes.clear()                 # reset pending
-    return jsonify({"status": "success", "message": "Blockchain imported"})
+    if not request.is_json:
+        return jsonify({"error": "Content-Type must be application/json"}), 415
 
-    # Rebuild chain from JSON
-    for blk in new_chain_json:
-        new_block = Block(
-            index=blk["index"],
-            data=blk["data"],
-            previous_hash=blk["previous_hash"],
-            nonce=blk.get("nonce", 0)
-        )
-        new_chain.append(new_block)
+    data = request.get_json(silent=True) or {}
+    new_chain_json = data.get("chain")
 
-    # Replace blockchain chain
-    blockchain.chain = new_chain
+    if not new_chain_json:
+        return jsonify({"error": "No chain data provided"}), 400
 
-    # Recompute hash to ensure integrity
-    for i in range(len(blockchain.chain)):
-        blockchain.chain[i].hash = blockchain.chain[i].compute_hash()
-        if i > 0:
-            blockchain.chain[i].previous_hash = blockchain.chain[i-1].hash
+    try:
+        # 🔹 build temporary blockchain
+        temp_blockchain = Blockchain()
+        temp_blockchain.from_dict(new_chain_json)
 
-    # Rebuild voted_list to prevent double-vote
-    blockchain.voted_list.clear()
-    for blk in blockchain.chain:
-        if isinstance(blk.data, list):
-            for vote in blk.data:
-                blockchain.voted_list.add(vote.get("voter"))
+        # 🔹 VALIDASI CHAIN
+        if not temp_blockchain.is_valid(DIFFICULTY):
+            return jsonify({
+                "status": "failed",
+                "error": "Blockchain validation failed",
+                "reason": "Hash mismatch / PoW invalid / chain tampered"
+            }), 400
 
-    # Clear pending votes (just like your original code)
-    pending_votes.clear()
+        # 🔹 kalau valid → replace
+        blockchain = temp_blockchain
+        blockchain.save_to_file(CHAIN_FILE)
+        pending_votes.clear()
 
-    return jsonify({"status": "success", "message": "Blockchain imported successfully", "blocks": len(blockchain.chain)})
+        return jsonify({
+            "status": "success",
+            "message": "Blockchain imported and validated",
+            "blocks": len(blockchain.chain)
+        }), 200
+
+    except Exception as e:
+        return jsonify({"error": "Import failed", "detail": str(e)}), 500
 
 
 # -------------------- Run Server --------------------
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=False)
+    import sys
+
+    port = 5000
+    if len(sys.argv) > 1:
+        port = int(sys.argv[1])
+
+    print(f"[START] Node running on port {port}")
+
+    # 🔥 tentuin identity node
+    my_url = f"http://127.0.0.1:{port}"
+
+    # 🔥 bootstrap node (node pertama di network)
+    BOOTSTRAP_NODE = "http://127.0.0.1:5000"
+
+    # 🔥 set file chain
+    CHAIN_FILE = os.path.join(CHAIN_DIR, f"chain_{port}.json")
+
+    load_chain_from_file()
+
+    # 🔥 connect ke network (kalau bukan bootstrap)
+    if my_url != BOOTSTRAP_NODE:
+        try:
+            # register ke bootstrap
+            requests.post(
+                f"{BOOTSTRAP_NODE}/add_peer",
+                json={"node": my_url},
+                timeout=5
+            )
+
+            # 🔥 AMBIL SEMUA PEERS DARI BOOTSTRAP
+            response = requests.get(f"{BOOTSTRAP_NODE}/get_peers", timeout=5)
+            if response.status_code == 200:
+                new_peers = response.json().get("peers", [])
+                for p in new_peers:
+                    if p != my_url:
+                        peers.add(p)
+
+            # jangan lupa bootstrap juga masuk peers
+            peers.add(BOOTSTRAP_NODE)
+
+            print(f"[BOOTSTRAP] Connected. Peers: {peers}")
+
+        except Exception as e:
+            print(f"[BOOTSTRAP] Failed: {e}")
+
+    # 🔥 initial sync
+    print("[SYNC] Initial sync with peers...")
+    resolve_conflicts()
+
+    app.run(host="0.0.0.0", port=port, debug=False)

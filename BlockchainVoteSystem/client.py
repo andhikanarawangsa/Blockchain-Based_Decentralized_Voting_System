@@ -7,6 +7,14 @@ KEY_DIR = "keys"
 CHAIN_DIR = "chain"
 os.makedirs(CHAIN_DIR, exist_ok=True)
 
+def is_node_alive(url):
+    try:
+        requests.get(url, timeout=2)
+        return True
+    except Exception as e:
+        print(f"[ERROR] Node {url} not reachable: {e}")
+        return False
+
 # --- Existing functions ---
 def cmd_genkeys(voter_id):
     try:
@@ -20,6 +28,8 @@ def register(voter_id, public_pem_path=None):
         public_pem_path = os.path.join(KEY_DIR, f"{voter_id}_public.pem")
     with open(public_pem_path, "r") as f:
         pem = f.read()
+    if not is_node_alive(BASE_URL):
+        return {"error": "Server not running"}
     r = requests.post(BASE_URL + "/register", json={"voter_id": voter_id, "public_key": pem})
     return r.json()  # <-- return data instead of print
 
@@ -35,15 +45,21 @@ def vote(voter_id, candidate):
         padding.PSS(mgf=padding.MGF1(hashes.SHA256()), salt_length=padding.PSS.MAX_LENGTH),
         hashes.SHA256()
     )
+    if not is_node_alive(BASE_URL):
+        return {"error": "Server not running"}
     r = requests.post(BASE_URL + "/vote", json={"voter_hash": voter_hash, "candidate": candidate, "signature": signature.hex()})
     return r.json()
 
 def force_commit():
+    if not is_node_alive(BASE_URL):
+        return {"error": "Server not running"}
     r = requests.post(BASE_URL + "/force_commit")
     return r.json()
 
 # --- Update: return dict instead of print ---
 def show_chain():
+    if not is_node_alive(BASE_URL):
+        return {"error": "Server not running"}
     r = requests.get(BASE_URL + "/chain")
     try:
         return r.json()
@@ -51,6 +67,8 @@ def show_chain():
         return None
 
 def show_results():
+    if not is_node_alive(BASE_URL):
+        return {"error": "Server not running"}
     r = requests.get(BASE_URL + "/results")
     try:
         return r.json()
@@ -59,14 +77,20 @@ def show_results():
 
 # --- New functions ---
 def reset_blockchain():
+    if not is_node_alive(BASE_URL):
+        return {"error": "Server not running"}
     r = requests.post(BASE_URL + "/reset")
     return r.json() if r.status_code==200 else {"error": r.status_code}
 
 def validate_chain():
+    if not is_node_alive(BASE_URL):
+        return {"error": "Server not running"}
     r = requests.get(BASE_URL + "/validate")
     return r.json() if r.status_code==200 else {"error": r.status_code}
 
 def export_chain():
+    if not is_node_alive(BASE_URL):
+        return {"error": "Server not running"}
     r = requests.get(BASE_URL + "/chain")
     if r.status_code != 200:
         return {"error": r.status_code}
@@ -80,13 +104,28 @@ def import_chain(filename):
     filepath = os.path.join(CHAIN_DIR, filename)
     if not os.path.exists(filepath):
         return {"error": f"File {filepath} does not exist."}
+
     with open(filepath, "r", encoding="utf-8") as f:
         data = json.load(f)
 
-    payload = {"chain": data["chain"]}  # ✅ hanya kirim chain
-    
-    r = requests.post(BASE_URL + "/import", json=payload)
-    return r.json() if r.status_code==200 else {"error": r.status_code}
+    payload = {"chain": data["chain"]}
+
+    try:
+        r = requests.post(BASE_URL + "/import", json=payload)
+
+        res = r.json()
+
+        if r.status_code != 200:
+            return {
+                "status": "failed",
+                "message": res.get("error", "Import failed"),
+                "detail": res.get("reason", "")
+            }
+
+        return res
+
+    except Exception as e:
+        return {"status": "failed", "error": str(e)}
 
 
 # --- CLI help ---

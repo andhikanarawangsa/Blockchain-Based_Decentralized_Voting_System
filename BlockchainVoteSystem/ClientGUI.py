@@ -45,7 +45,7 @@ class VoteGUI:
         tk.Button(btn_frame, text="Show Results", command=self.threaded(self.show_results), **btn_params).grid(row=0, column=5, padx=5, pady=5)
         tk.Button(btn_frame, text="Reset Blockchain", command=self.threaded(self.reset_blockchain), **btn_params).grid(row=0, column=6, padx=5, pady=5)
         tk.Button(btn_frame, text="Validate Chain", command=self.threaded(self.validate_chain), **btn_params).grid(row=0, column=7, padx=5, pady=5)
-
+        
         #modif
         tk.Button(btn_frame, text="Export Chain", command=self.threaded(self.export_chain), **btn_params).grid(row=0, column=8, padx=5, pady=5)
         #tk.Button(btn_frame, text="Import Chain", command=self.threaded(self.import_chain_prompt), **btn_params).grid(row=0, column=9, padx=5, pady=5)

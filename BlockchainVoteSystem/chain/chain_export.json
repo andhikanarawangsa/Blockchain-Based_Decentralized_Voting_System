@@ -2,24 +2,41 @@
   "chain": [
     {
       "data": "Genesis Block",
-      "hash": "09f2a7ae86ebde87256cbfd4992d31a10a8f041466d71de47d80540d8340d900",
+      "hash": "96da32d9b63beff9519d6605edfce0a105f6fb3f46a348834e739d92a6ccd0e5",
       "index": 0,
       "nonce": 0,
       "previous_hash": "0",
-      "timestamp": 1762416783.2394948
+      "timestamp": 1762426283.7613866
     },
     {
       "data": [
         {
-          "candidate": "b",
-          "voter": "557f3d3b1811d3378c6949612141fe09d538cc1a0fcbb747e5679b5b4f046934"
+          "candidate": "Anis",
+          "voter": "9a1d28e883371b24f92fb097ff1ed7a8c65147e35df1c1968a84aadd7d5f6f63"
+        },
+        {
+          "candidate": "Anis",
+          "voter": "f30fc0e061eba665e0a964fdcd418a723c5c940bb576cbcd41d3659b852dc8cf"
         }
       ],
-      "hash": "0000f95c1004dab5a5906af214d55ece0fb6fc3e3e58696be8b950e215eebd62",
+      "hash": "0000eea262ed079c24c1746fc6f3ce5c13c94f2a21c478081b8582a06e168e8c",
       "index": 1,
-      "nonce": 10542,
-      "previous_hash": "09f2a7ae86ebde87256cbfd4992d31a10a8f041466d71de47d80540d8340d900",
-      "timestamp": 1762416931.573207
+      "nonce": 8323,
+      "previous_hash": "96da32d9b63beff9519d6605edfce0a105f6fb3f46a348834e739d92a6ccd0e5",
+      "timestamp": 1762426432.894659
+    },
+    {
+      "data": [
+        {
+          "candidate": "Prabowo",
+          "voter": "882d1fe2903d159a095583e71fd1ef163a1189a11ccca6c803594c11caf28c92"
+        }
+      ],
+      "hash": "0000fd172359918e17bc5d3ccd2cae7b1a57feeeaf7e1a7e2aa4eb1ce25b8edd",
+      "index": 2,
+      "nonce": 15136,
+      "previous_hash": "0000eea262ed079c24c1746fc6f3ce5c13c94f2a21c478081b8582a06e168e8c",
+      "timestamp": 1762426541.76576
     }
   ],
   "pending_votes": []
