@@ -13,6 +13,7 @@ import hashlib, os
 import requests
 
 from flask import Flask, request, jsonify
+from flask_cors import CORS
 from blockchain import Blockchain, Block
 from datetime import datetime
 from cryptography.hazmat.primitives import serialization, hashes
@@ -20,6 +21,7 @@ from cryptography.hazmat.primitives.asymmetric import padding
 
 # -------------------- CONFIG & GLOBAL STATE --------------------
 app = Flask(__name__)
+CORS(app)
 
 # Blockchain State
 blockchain = Blockchain()
@@ -205,6 +207,14 @@ def receive_block():
 
     return jsonify({"status": "Block accepted"}), 200
 
+# Network Endpoint
+@app.route("/network", methods=["GET"])
+def network():
+    return jsonify({
+        "self": my_url,
+        "peers": list(peers)
+    })
+
 # -------------------- VOTING SYSTEM --------------------
 # Register
 @app.route("/register", methods=["POST"])
@@ -349,6 +359,17 @@ def validate():
         return jsonify({"valid": valid}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+# Status
+@app.route("/status", methods=["GET"])
+def status():
+    return jsonify({
+        "node": my_url,
+        "chain_length": len(blockchain.chain),
+        "pending_votes": len(pending_votes),
+        "peers": list(peers),
+        "valid": blockchain.is_valid(DIFFICULTY)
+    }), 200
 
 # Reset Blockchain
 @app.route("/reset", methods=["POST"])
