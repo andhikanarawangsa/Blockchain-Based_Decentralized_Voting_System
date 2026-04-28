@@ -2,7 +2,7 @@
 ## 1. Overview
 The system is a decentralized voting blockchain built on a peer-to-peer (P2P) network architecture. Each node operates independently while maintaining consensus through blockchain synchronization and Proof-of-Work (PoW). The system ensures tamper-resistant voting, distributed trust, and real-time state consistency across all nodes.
 
-## 2. System Architecture Diagram
+## 2. System Architecture
 The system is a decentralized voting blockchain built on a peer-to-peer (P2P) network where each node maintains a full copy of the ledger and participates equally in validation and synchronization. Votes are submitted as digitally signed transactions, validated by nodes, then grouped into blocks through Proof-of-Work before being propagated across the network to maintain consensus.
 
 ## 3. System Architecture Layers
@@ -10,7 +10,8 @@ The system is composed of four main layers:
 
 ### 3.1 Client Layer
 The client layer is responsible for user interaction and cryptographic vote generation.
-![Client Layer Diagram](./assets/ClientLayer.png)
+
+![Client Layer Diagram](./Assets/ClientLayer.png)
 
 **Responsibilities:**
 - Generate RSA key pairs (public/private key)
@@ -24,7 +25,8 @@ The client layer is responsible for user interaction and cryptographic vote gene
 
 ### 3.2 Blockchain Node Layer
 Each node maintains a full copy of the blockchain and processes incoming transactions.
-![Blockchain Node Diagram](./assets/BlockchainNodeLayer.png)
+
+![Blockchain Node Diagram](./Assets/BlockchainNodeLayer.png)
 
 **Core Functions:**
 - Validate incoming votes using public key verification
@@ -57,7 +59,8 @@ This layer handles decentralized communication between nodes.
 
 ### 3.4 Blockchain Structure
 Each block in the system contains structured and verifiable data.
-![Blockchain Structure Diagram](./assets/BlockchainStructure.png)
+
+![Blockchain Structure Diagram](./Assets/BlockchainStructure.png)
 
 **Block Schema:**
 - Index  
@@ -86,11 +89,13 @@ The voting process follows this sequence:
 7. Block is broadcast to peers  
 8. Other nodes validate and append block  
 9. Network reaches consensus (longest valid chain)
-![Data Flow Diagram](./assets/DataFlow.png)
+
+![Data Flow Diagram](./Assets/DataFlow.png)
 
 ## 5. Peer-to-Peer Synchronization Model
 The system uses a hybrid P2P model:
-![P2P Synchronization](./assets/P2PSynchronization.png)
+
+![P2P Synchronization](./Assets/P2PSynchronization.png)
 
 **Features:**
 - Fully decentralized (no central authority)
