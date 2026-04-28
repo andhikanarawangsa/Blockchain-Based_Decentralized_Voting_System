@@ -1,57 +1,40 @@
 [
     {
         "index": 0,
-        "timestamp": 1777319427.2049391,
+        "timestamp": 1777339847.9804661,
         "data": "Genesis Block",
         "previous_hash": "0",
         "nonce": 0,
-        "hash": "cbf38d0de81018dbec23e331c204af278f95431894bc32dbb40cb66925be68fb"
+        "hash": "8329c2058a48ed61ad679330ea63b22f38b16494bce294f515805fa5038df9aa"
     },
     {
         "index": 1,
-        "timestamp": 1777319471.026198,
+        "timestamp": 1777340015.212721,
         "data": [
             {
-                "candidate": "candidate1",
-                "voter": "2bd806c97f0e00af1a1fc3328fa763a9269723c8db8fac4f93af71db186d6e90"
+                "candidate": "Candidate1",
+                "voter": "3bc51062973c458d5a6f2d8d64a023246354ad7e064b1e4e009ec8a0699a3043"
             },
             {
-                "candidate": "candidate2",
-                "voter": "81b637d8fcd2c6da6359e6963113a1170de795e4b725b84d1e0b4cfd9ec58ce9"
+                "candidate": "Candidate2",
+                "voter": "cd9fb1e148ccd8442e5aa74904cc73bf6fb54d1d54d333bd596aa9bb4bb4e961"
             }
         ],
-        "previous_hash": "cbf38d0de81018dbec23e331c204af278f95431894bc32dbb40cb66925be68fb",
-        "nonce": 396718,
-        "hash": "0000cbc1392e18a5adae01d79d18d2b791e74faf54ede13545c7af6157017f53"
+        "previous_hash": "8329c2058a48ed61ad679330ea63b22f38b16494bce294f515805fa5038df9aa",
+        "nonce": 114701,
+        "hash": "00007b2a8c4b93e56630e9a4be31f4891a9bbe938a471d021fda02a58ae16edc"
     },
     {
         "index": 2,
-        "timestamp": 1777319676.812369,
+        "timestamp": 1777340037.089717,
         "data": [
             {
-                "candidate": "candidate2",
-                "voter": "9a1d28e883371b24f92fb097ff1ed7a8c65147e35df1c1968a84aadd7d5f6f63"
-            },
-            {
-                "candidate": "candidate1",
-                "voter": "882d1fe2903d159a095583e71fd1ef163a1189a11ccca6c803594c11caf28c92"
+                "candidate": "Candidate2",
+                "voter": "b9bae658d96579857efe22dee62673a31355446ddc6ad270ec046aa8c717081c"
             }
         ],
-        "previous_hash": "0000cbc1392e18a5adae01d79d18d2b791e74faf54ede13545c7af6157017f53",
-        "nonce": 1496,
-        "hash": "00005f464a1cea9fac5ccba9a306d71c5cd084eb73a09bdea00cd3c8176f27ff"
-    },
-    {
-        "index": 3,
-        "timestamp": 1777320517.357093,
-        "data": [
-            {
-                "candidate": "candidate1",
-                "voter": "1b4f0e9851971998e732078544c96b36c3d01cedf7caa332359d6f1d83567014"
-            }
-        ],
-        "previous_hash": "00005f464a1cea9fac5ccba9a306d71c5cd084eb73a09bdea00cd3c8176f27ff",
-        "nonce": 10961,
-        "hash": "0000d809747c8ebfd1ca3e085a45c2946deb845e7d44d3f1414a9e98c5ea50fd"
+        "previous_hash": "00007b2a8c4b93e56630e9a4be31f4891a9bbe938a471d021fda02a58ae16edc",
+        "nonce": 24432,
+        "hash": "000056c38b6bd8e4b74c75b6e7e440b6dd89b50ba8fc32fd204e85e0cb86784b"
     }
 ]
