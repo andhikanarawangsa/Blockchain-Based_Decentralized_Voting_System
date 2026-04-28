@@ -1,5 +1,0 @@
-1. Generate User Key (Public & Private(SIGN))
-2. Register User
-3. Vote
-4. Anti Double Vote
-5. Validate Block

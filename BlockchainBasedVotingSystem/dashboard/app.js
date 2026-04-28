@@ -1,8 +1,8 @@
-/*
-==========================================
-Blockchain Voting Dashboard (FIXED FINAL)
-==========================================
-*/
+/*==========================================
+Decentralized Voting Blockchain (Dashboard JS)
+Author : Andhika Narawangsa Susilo
+https://github.com/andhikanarawangsa
+==========================================*/
 
 const NODE_SEEDS = [
     "http://127.0.0.1:5000",

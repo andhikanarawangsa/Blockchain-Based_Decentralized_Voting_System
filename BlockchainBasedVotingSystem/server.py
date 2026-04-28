@@ -493,7 +493,6 @@ if __name__ == "__main__":
     CHAIN_FILE = os.path.join(CHAIN_DIR, f"chain_{port}.json")
     load_chain_from_file()
 
-    # -------------------- TRY JOIN NETWORK --------------------
     join_network()
     
     try:
@@ -507,7 +506,6 @@ if __name__ == "__main__":
     except:
         print("[BOOTSTRAP] not reachable, running standalone")
 
-    # -------------------- INITIAL PEER SYNC --------------------
     def sync_network():
         global peers
 
@@ -527,9 +525,7 @@ if __name__ == "__main__":
     print("[SYNC] Initial network reconciliation...")
     sync_network()
 
-    # -------------------- FINAL CHAIN SYNC --------------------
     print("[SYNC] Resolving blockchain state...")
     resolve_conflicts()
 
-    # -------------------- START SERVER --------------------
     app.run(host="0.0.0.0", port=port, debug=False)
