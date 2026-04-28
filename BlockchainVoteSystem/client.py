@@ -20,6 +20,13 @@ from cryptography.hazmat.primitives.asymmetric import padding
 
 # -------------------- CONFIG --------------------
 BASE_URL = "http://127.0.0.1:5000"
+SEED_NODES = [
+    "http://127.0.0.1:5000",
+    "http://127.0.0.1:5001",
+    "http://127.0.0.1:5002"
+]
+
+BASE_URL = None
 
 KEY_DIR = "keys"
 CHAIN_DIR = "chain"
@@ -27,13 +34,24 @@ CHAIN_DIR = "chain"
 os.makedirs(CHAIN_DIR, exist_ok=True)
 
 # -------------------- UTILITIES --------------------
-def is_node_alive(url):
-    try:
-        requests.get(url, timeout=2)
-        return True
-    except Exception as e:
-        print(f"[ERROR] Node {url} not reachable: {e}")
-        return False
+def is_node_alive():
+    return BASE_URL is not None
+    
+def discover_active_node():
+    global BASE_URL
+
+    for node in SEED_NODES:
+        try:
+            r = requests.get(f"{node}/ping", timeout=1)
+            if r.status_code == 200:
+                BASE_URL = node
+                print(f"[CLIENT] Connected to active node: {BASE_URL}")
+                return
+        except:
+            continue
+
+    BASE_URL = None
+    print("[CLIENT] No active node found")
 
 # -------------------- CRYPTO --------------------
 def cmd_genkeys(voter_id):
@@ -48,8 +66,8 @@ def register(voter_id, public_pem_path=None):
         public_pem_path = os.path.join(KEY_DIR, f"{voter_id}_public.pem")
     with open(public_pem_path, "r") as f:
         pem = f.read()
-    if not is_node_alive(BASE_URL):
-        return {"error": "Server not running"}
+    if not is_node_alive():
+        return {"error": "No active node"}
     r = requests.post(BASE_URL + "/register", json={"voter_id": voter_id, "public_key": pem})
     return r.json()
 
@@ -65,20 +83,20 @@ def vote(voter_id, candidate):
         padding.PSS(mgf=padding.MGF1(hashes.SHA256()), salt_length=padding.PSS.MAX_LENGTH),
         hashes.SHA256()
     )
-    if not is_node_alive(BASE_URL):
-        return {"error": "Server not running"}
+    if not is_node_alive():
+        return {"error": "No active node"}
     r = requests.post(BASE_URL + "/vote", json={"voter_hash": voter_hash, "candidate": candidate, "signature": signature.hex()})
     return r.json()
 
 def force_commit():
-    if not is_node_alive(BASE_URL):
-        return {"error": "Server not running"}
+    if not is_node_alive():
+        return {"error": "No active node"}
     r = requests.post(BASE_URL + "/force_commit")
     return r.json()
 
 def show_chain():
-    if not is_node_alive(BASE_URL):
-        return {"error": "Server not running"}
+    if not is_node_alive():
+        return {"error": "No active node"}
     r = requests.get(BASE_URL + "/chain")
     try:
         return r.json()
@@ -86,8 +104,8 @@ def show_chain():
         return None
 
 def show_results():
-    if not is_node_alive(BASE_URL):
-        return {"error": "Server not running"}
+    if not is_node_alive():
+        return {"error": "No active node"}
     r = requests.get(BASE_URL + "/results")
     try:
         return r.json()
@@ -95,20 +113,20 @@ def show_results():
         return None
 
 def reset_blockchain():
-    if not is_node_alive(BASE_URL):
-        return {"error": "Server not running"}
+    if not is_node_alive():
+        return {"error": "No active node"}
     r = requests.post(BASE_URL + "/reset")
     return r.json() if r.status_code==200 else {"error": r.status_code}
 
 def validate_chain():
-    if not is_node_alive(BASE_URL):
-        return {"error": "Server not running"}
+    if not is_node_alive():
+        return {"error": "No active node"}
     r = requests.get(BASE_URL + "/validate")
     return r.json() if r.status_code==200 else {"error": r.status_code}
 
 def export_chain():
-    if not is_node_alive(BASE_URL):
-        return {"error": "Server not running"}
+    if not is_node_alive():
+        return {"error": "No active node"}
     r = requests.get(BASE_URL + "/chain")
     if r.status_code != 200:
         return {"error": r.status_code}
@@ -162,6 +180,7 @@ def help_text():
 
 # -------------------- ENTRYPOINT --------------------
 if __name__ == "__main__":
+    discover_active_node()
     if len(sys.argv) < 2:
         help_text()
         sys.exit(0)

@@ -1,35 +1,59 @@
 /*
 ==========================================
-Blockchain Voting Dashboard (FINAL CLEAN v2)
+Blockchain Voting Dashboard (FIXED FINAL)
 ==========================================
 */
 
-const BOOTSTRAP_NODE = "http://127.0.0.1:5000";
+const NODE_SEEDS = [
+    "http://127.0.0.1:5000",
+    "http://127.0.0.1:5001",
+    "http://127.0.0.1:5002"
+];
+
 let nodes = [];
+let lastAliveNodes = [];
 
 // -------------------- DISCOVERY --------------------
 async function discoverNodes() {
     try {
-        const res = await fetch(`${BOOTSTRAP_NODE}/network`);
+        let bootstrap = null;
+
+        for (const node of NODE_SEEDS) {
+            try {
+                const res = await fetch(`${node}/status`);
+                if (res.ok) {
+                    bootstrap = node;
+                    break;
+                }
+            } catch {}
+        }
+
+        if (!bootstrap) {
+            nodes = [];
+            return;
+        }
+
+        const res = await fetch(`${bootstrap}/network`);
         const data = await res.json();
 
         const discovered = new Set();
+
         discovered.add(data.self);
 
         (data.peers || []).forEach(p => discovered.add(p));
 
-        nodes = Array.from(discovered);
+        nodes = [...discovered];
 
     } catch (e) {
         console.error("Discovery failed:", e);
-        nodes = [BOOTSTRAP_NODE];
+        nodes = [];
     }
 }
 
 // -------------------- FETCH NODE --------------------
 async function fetchNode(node) {
     try {
-        const res = await fetch(`${node}/status`);
+        const res = await fetch(`${node}/status`, { cache: "no-store" });
         if (!res.ok) throw new Error();
 
         const data = await res.json();
@@ -66,7 +90,6 @@ function renderCard(data) {
 
         <div class="metrics">
             <p>Pending Votes : <b>${data.pending_votes}</b></p>
-            <p>Peers : <b>${data.peers?.length || 0}</b></p>
             <p>Status : <span class="badge ok">LIVE</span></p>
         </div>
     `;
@@ -76,11 +99,16 @@ function renderCard(data) {
 
 // -------------------- GLOBAL RESULTS --------------------
 async function fetchGlobalResults() {
-    if (!nodes.length) return { results: {} };
+    if (!lastAliveNodes.length) return { results: {} };
+
+    const node = lastAliveNodes[0];
 
     try {
-        const res = await fetch(`${nodes[0]}/results`);
+        const res = await fetch(`${node}/results`, { cache: "no-store" });
+        if (!res.ok) throw new Error();
+
         return await res.json();
+
     } catch {
         return { results: {} };
     }
@@ -98,9 +126,13 @@ async function updateDashboard() {
 
     const results = await Promise.all(nodes.map(fetchNode));
 
-    results.forEach(data => {
+    // filter alive nodes
+    const aliveNodes = results.filter(n => n.ok);
+    lastAliveNodes = aliveNodes.map(n => n.node);
+
+    aliveNodes.forEach(data => {
         container.appendChild(renderCard(data));
-        if (data.ok) alive++;
+        alive++;
     });
 
     document.getElementById("aliveNodes").innerText = alive;

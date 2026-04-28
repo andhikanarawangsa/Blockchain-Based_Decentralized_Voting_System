@@ -11,6 +11,7 @@
 # -------------------- IMPORTS --------------------
 import hashlib, os
 import requests
+import sys, time
 
 from flask import Flask, request, jsonify
 from flask_cors import CORS
@@ -118,39 +119,82 @@ def add_peer():
     data = request.get_json()
     node = data.get("node")
 
-    if not node:
-        return jsonify({"error": "No node provided"}), 400
+    if not node or node == my_url:
+        return jsonify({"error": "invalid"}), 400
 
-    if node not in peers and node != my_url:
-        peers.add(node)
+    before = len(peers)
+    peers.add(node)
 
+    # optional: return current state ONLY
+    return jsonify({
+        "message": "ok",
+        "added": len(peers) > before,
+        "peers": list(peers)
+    }), 200
+
+    # -------------------- IDEMPOTENT CHECK --------------------
+    if node in peers:
+        return jsonify({
+            "message": "Peer already exists",
+            "peers": list(peers)
+        }), 200
+
+    # -------------------- ADD NEW PEER --------------------
+    peers.add(node)
+
+    try:
+        response = requests.get(f"{node}/get_peers", timeout=3)
+        if response.status_code == 200:
+            remote_peers = response.json().get("peers", [])
+            for p in remote_peers:
+                if p != my_url:
+                    peers.add(p)
+    except Exception as e:
+        print(f"[PEER FETCH ERROR] {e}")
+
+    for peer in list(peers):
+        if peer in (my_url, node):
+            continue
         try:
-            response = requests.get(f"{node}/get_peers", timeout=5) # get peers
-            if response.status_code == 200:
-                new_peers = response.json().get("peers", [])
-                for p in new_peers:
-                    if p != my_url:
-                        peers.add(p)
+            requests.post(
+                f"{peer}/add_peer",
+                json={"node": node},
+                timeout=3
+            )
         except Exception as e:
-            print(f"[PEER FETCH ERROR] {e}")
-
-        for peer in peers: # broadcast peer to all peers
-            if peer == my_url:
-                continue
-            try:
-                requests.post(
-                    f"{peer}/add_peer",
-                    json={"node": my_url},
-                    timeout=5
-                )
-            except Exception as e:
-                print(f"[BROADCAST ERROR] {peer}: {e}")
+            print(f"[BROADCAST ERROR] {peer}: {e}")
 
     return jsonify({
-        "message": "Peer added",
+        "message": "Peer added successfully",
         "peers": list(peers)
-    })
+    }), 201
+    
+# Join Network
+def join_network():
+    global peers
 
+    for seed in SEED_NODES:
+        try:
+            r = requests.get(f"{seed}/ping", timeout=2)
+            if r.status_code == 200:
+                requests.post(
+                    f"{seed}/add_peer",
+                    json={"node": my_url},
+                    timeout=2
+                )
+
+                res = requests.get(f"{seed}/get_peers", timeout=2)
+                if res.status_code == 200:
+                    for p in res.json().get("peers", []):
+                        if p != my_url:
+                            peers.add(p)
+
+                peers.add(seed)
+                break
+
+        except:
+            continue
+        
 # Get Peer
 @app.route("/get_peers", methods=["GET"])
 def get_peers():
@@ -165,6 +209,12 @@ def sync():
     return jsonify({
         "replaced": replaced,
         "length": len(blockchain.chain)
+    })
+
+@app.route("/sync_peers", methods=["GET"])
+def sync_peers():
+    return jsonify({
+        "peers": list(peers)
     })
 
 # Receive Block    
@@ -214,6 +264,10 @@ def network():
         "self": my_url,
         "peers": list(peers)
     })
+
+@app.route("/ping", methods=["GET"])
+def ping():
+    return jsonify({"ok": True})
 
 # -------------------- VOTING SYSTEM --------------------
 # Register
@@ -420,7 +474,6 @@ def import_chain():
 
 # -------------------- RUN SERVER --------------------
 if __name__ == "__main__":
-    import sys
 
     port = 5000
     if len(sys.argv) > 1:
@@ -428,34 +481,55 @@ if __name__ == "__main__":
 
     print(f"[START] Node running on port {port}")
 
-    my_url = f"http://127.0.0.1:{port}" # state node identity
-    BOOTSTRAP_NODE = "http://127.0.0.1:5000" # bootstrap first node
+    my_url = f"http://127.0.0.1:{port}"
 
-    CHAIN_FILE = os.path.join(CHAIN_DIR, f"chain_{port}.json") # set chain file
+    # bootstrap optional (NOT authority)
+    SEED_NODES = [
+    "http://127.0.0.1:5000",
+    "http://127.0.0.1:5001",
+    "http://127.0.0.1:5002"
+    ]
+
+    CHAIN_FILE = os.path.join(CHAIN_DIR, f"chain_{port}.json")
     load_chain_from_file()
 
-    if my_url != BOOTSTRAP_NODE: # connect to network if != bootstrap
-        try:
-            requests.post( # register
+    # -------------------- TRY JOIN NETWORK --------------------
+    join_network()
+    
+    try:
+        if my_url != BOOTSTRAP_NODE:
+            # join bootstrap (if alive)
+            requests.post(
                 f"{BOOTSTRAP_NODE}/add_peer",
                 json={"node": my_url},
-                timeout=5
+                timeout=3
             )
-            
-            response = requests.get(f"{BOOTSTRAP_NODE}/get_peers", timeout=5) # get all peers
-            if response.status_code == 200:
-                new_peers = response.json().get("peers", [])
-                for p in new_peers:
-                    if p != my_url:
-                        peers.add(p)
-            peers.add(BOOTSTRAP_NODE)
+    except:
+        print("[BOOTSTRAP] not reachable, running standalone")
 
-            print(f"[BOOTSTRAP] Connected. Peers: {peers}")
+    # -------------------- INITIAL PEER SYNC --------------------
+    def sync_network():
+        global peers
 
-        except Exception as e:
-            print(f"[BOOTSTRAP] Failed: {e}")
+        all_peers = set(peers)
 
-    print("[SYNC] Initial sync with peers...")
+        for peer in list(peers):
+            try:
+                res = requests.get(f"{peer}/get_peers", timeout=3)
+                if res.status_code == 200:
+                    for p in res.json().get("peers", []):
+                        all_peers.add(p)
+            except:
+                pass
+
+        peers.update(all_peers)
+
+    print("[SYNC] Initial network reconciliation...")
+    sync_network()
+
+    # -------------------- FINAL CHAIN SYNC --------------------
+    print("[SYNC] Resolving blockchain state...")
     resolve_conflicts()
 
+    # -------------------- START SERVER --------------------
     app.run(host="0.0.0.0", port=port, debug=False)
