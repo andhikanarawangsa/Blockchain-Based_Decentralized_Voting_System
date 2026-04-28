@@ -38,10 +38,14 @@ python client.py export
 python client.py import <filename>
 
 ## Run Client (GUI)
+```bash
 python clientGUI.py
+```
 ![Client GUI](./Assets/ClientGUIVoting.png)
 
 ## Dashboard Monitoring
+```bash
 run dashboard/index.html
+```
 ![Live Dashboard Monitoring](./Assets/DashboardMonitoring.png)
 
