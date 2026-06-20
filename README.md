@@ -44,6 +44,6 @@ The system is designed as a **multi-node peer-to-peer network**, where each node
 - [Setup Guide](./Docs/Setup.md)
 - [Research & Future Work](./Docs/Research.md)
 
-## ⚠️ Disclaimer
+## Disclaimer
 This project is built for educational and research purposes only.  
 It is not intended for production election systems without further security hardening and formal verification.
